@@ -25,6 +25,8 @@
 #'
 #' @param barcode_length Optional. Specifies the length of barcode needed. If not specified, defaults to 26.
 #'
+#' @param output_name
+#' 
 #' @return Saves extracted intergenic reads as a separate file (“intergenic_reads.bed”)
 #' @export
 #'
@@ -32,10 +34,11 @@
 #' IsolateIntergenicReads(
 #' bam_file_name = "test_bam.bam",
 #' index_file_name = "test_index.bam.bai")
-IsolateIntergenicReads <- function(bam_file_name, index_file_name, barcode_length = NULL){
+IsolateIntergenicReads <- function(bam_file_name, index_file_name, barcode_length = NULL, output_name =  "intergenic_reads.bed"){
 
   bamfile = bam_file_name
   indexfile = index_file_name
+  output = output_name
 
   if(bamfile == "test_bam.bam" & indexfile == "test_index.bam.bai"){
     bamfile <- system.file("extdata", "test_bam.bam", package = "ReferenceEnhancer")
@@ -71,7 +74,7 @@ IsolateIntergenicReads <- function(bam_file_name, index_file_name, barcode_lengt
 
   ga_seq_data = as(gr_seq_data, "GAlignments") # Coerces GRanges object into a GAlignments object, that can be saved as a bed file. Required for bedtools to link reads to closest 3' gene end.
   m = rtracklayer::asBED(ga_seq_data)# converts GAlignments object into the bed format
-  write_bed(m, "intergenic_reads.bed")
+  write_bed(m, output)
   print("Extracted intergenic reads have been saved to your working directory as intergenic_reads.bed.")
 
 }
