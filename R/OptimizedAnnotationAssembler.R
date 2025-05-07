@@ -169,8 +169,10 @@ OptimizedAnnotationAssembler <- function(unoptimized_annotation_path, gene_overl
   #overlap_df$genes # genes to exclude from premrna reference appending
 
   genes_to_append = unique(new_df$gene_name)
-  genes_to_append = setdiff(genes_to_append, overlap_df$genes)
   print(length(genes_to_append))
+  genes_to_append = setdiff(genes_to_append, overlap_df$gene)
+  print(length(genes_to_append))
+
   ## Give new transcript_ids to everything in the pre-mRNA gtf
 
   for (i in 1:dim(premrna_df)[1]){
