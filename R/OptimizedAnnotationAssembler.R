@@ -61,7 +61,6 @@ OptimizedAnnotationAssembler <- function(unoptimized_annotation_path, gene_overl
     gene_overlaps <- system.file("extdata", "test_overlapping_gene_list.csv", package = "ReferenceEnhancer")
   }
 
-
   unoptimized_df <- LoadGtf(unoptimized_annotation_path)
 
   overlap_df = read.csv(gene_overlaps, header=T)
@@ -97,7 +96,7 @@ OptimizedAnnotationAssembler <- function(unoptimized_annotation_path, gene_overl
   ####  3. Delete select transcripts ####
   #######################################
   transcripts_to_delete = overlap_df$transcripts_for_deletion
-  transcripts_to_delete <- transcripts_to_delete[transcripts_to_delete!=""]
+  transcripts_to_delete <- transcripts_to_delete[transcripts_to_delete!="" & !is.na(transcripts_to_delete)]
 
   transcripts_to_delete_final = transcripts_to_delete[!stringr::str_detect(transcripts_to_delete, ", ")]
 
@@ -113,7 +112,7 @@ OptimizedAnnotationAssembler <- function(unoptimized_annotation_path, gene_overl
 
   transcripts_to_delete = transcripts_to_delete_final
 
-  new_df = new_df[!new_df$transcript_name %in% transcripts_to_delete,]
+  new_df = new_df[!new_df$transcript_id %in% transcripts_to_delete,]
 
   ####  4. Adjust gene coordinates ####
   #####################################
@@ -171,7 +170,7 @@ OptimizedAnnotationAssembler <- function(unoptimized_annotation_path, gene_overl
 
   genes_to_append = unique(new_df$gene_name)
   genes_to_append = setdiff(genes_to_append, overlap_df$genes)
-
+  print(length(genes_to_append))
   ## Give new transcript_ids to everything in the pre-mRNA gtf
 
   for (i in 1:dim(premrna_df)[1]){
