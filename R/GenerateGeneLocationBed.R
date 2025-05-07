@@ -33,14 +33,8 @@ GenerateGeneLocationBed <- function(genome_annotation, bedops_loc = NULL){
   system('awk \'{ if ($0 ~ "transcript_id") print $0; else print $0" transcript_id \"\";"; }\' gene_ranges.gtf > gene_ranges1.gtf')
 
   ## Check for bedops
-  if(is.null(bedops_loc)){
-    if(is.na(unlist(strsplit(system("whereis bedops", intern = TRUE),": "))[2])){
-      print("Didn't find bedops. Please install bedops or provide a path to bedops.")
-    }
-  else{
-    old_path <- Sys.getenv("PATH")
-    Sys.setenv(PATH = paste(old_path, bedops_loc, sep = ":"))
-    }}
+
+  Sys.setenv(PATH = paste(Sys.getenv("PATH"), "/opt/bedops/", sep = ":"))
 
   system('gtf2bed < gene_ranges1.gtf > gene_ranges.bed') # Creates a bed file with gene boundaries
 
