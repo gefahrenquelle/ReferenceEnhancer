@@ -167,12 +167,17 @@ OptimizedAnnotationAssembler <- function(unoptimized_annotation_path, gene_overl
   ## Genes to modify
 
   #overlap_df$genes # genes to exclude from premrna reference appending
+  cat("Length of data before filtering out start/end NAs ", nrow(new_df), "\n")
+  new_df <- new_df[!is.na(new_df$start) & !is.na(new_df$end), ]
+  cat("Length of data after filtering out start/end NAs ", nrow(new_df), "\n")
 
   genes_to_append = unique(new_df$gene_name)
   print(length(genes_to_append))
   genes_to_append = setdiff(genes_to_append, overlap_df$gene)
   print(length(genes_to_append))
 
+  ## temporarily limit genes for debugging
+  genes_to_append <- genes_to_append[1:3000]
   ## Give new transcript_ids to everything in the pre-mRNA gtf
 
   for (i in 1:dim(premrna_df)[1]){
@@ -222,7 +227,13 @@ OptimizedAnnotationAssembler <- function(unoptimized_annotation_path, gene_overl
 
   #### 7. Export object to gtf file ####
   ######################################
+  print(new_df[is.na(new_df$start) | is.na(new_df$end), ])
+  cat("Length of data before filtering out start/end NAs with new premRNA transcripts", nrow(new_df), "\n")
+  new_df <- new_df[!is.na(new_df$start) & !is.na(new_df$end), ]
+  cat("Length of data after filtering out start/end NAs with new premRNA transcripts", nrow(new_df), "\n")
   new_gtf = GenomicRanges::makeGRangesFromDataFrame(new_df, keep.extra.columns=TRUE)
+
+  
 
   write_gtf(new_gtf, "optimized_reference.gtf")
   print("Optimized annotation reference has been saved in working directory as optimized_reference.gtf")
