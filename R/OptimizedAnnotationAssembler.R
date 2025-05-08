@@ -120,10 +120,10 @@ OptimizedAnnotationAssembler <- function(unoptimized_annotation_path, gene_overl
 
   left_genes = as.data.frame(cbind(boundary_fix$genes[!is.na(boundary_fix$update_start)], boundary_fix$update_start[!is.na(boundary_fix$update_start)]))
 
-  colnames(left_genes) = c("genes", "update_start")
+  colnames(left_genes) = c("Var1", "update_start")
   left_genes$update_start = as.numeric(left_genes$update_start)
   right_genes = as.data.frame(cbind(boundary_fix$genes[!is.na(boundary_fix$update_end)], boundary_fix$update_end[!is.na(boundary_fix$update_end)]))
-  colnames(right_genes) = c("genes", "update_end")
+  colnames(right_genes) = c("Var1", "update_end")
   right_genes$update_end = as.numeric(right_genes$update_end)
 
   left_exon_difs = rep(0, length(left_genes)) # for troubleshooting
