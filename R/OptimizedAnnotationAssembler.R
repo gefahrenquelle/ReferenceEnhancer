@@ -60,46 +60,60 @@ OptimizedAnnotationAssembler <- function(unoptimized_annotation_path, gene_overl
   if(gene_overlaps == "test_overlapping_gene_list.csv"){
     gene_overlaps <- system.file("extdata", "test_overlapping_gene_list.csv", package = "ReferenceEnhancer")
   }
-
+  
   unoptimized_df <- LoadGtf(unoptimized_annotation_path)
-
+  
   overlap_df = read.csv(gene_overlaps, header=T)
-
+  
   new_df = unoptimized_df
 
-
+  print(new_df[is.na(new_df$start) | is.na(new_df$end), ])
+  cat("Length of data before filtering out start/end NAs", nrow(new_df), "\n")
+  new_df <- new_df[!is.na(new_df$start) & !is.na(new_df$end), ]
+  cat("Length of data after filtering out start/end NAs", nrow(new_df), "\n")
+  
+  
   ####  1. Create premRNA genome annotation from input gtf that defines transcripts as exons ####
   ###############################################################################################
-  transcripts_df = unoptimized_df[unoptimized_df$type == "transcript",]
-  exons_df = transcripts_df # Create new dataframe to contain premrna exons
-  exons_df$type = rep("exon", nrow(exons_df)) # rename "type" from transcripts to exon
-
-  premrna_df = gdata::interleave(transcripts_df, exons_df) # interleave transript entries with exon entries
-  premrna_df$transcript_id = gsub("000000", "100000", premrna_df$transcript_id)
-  premrna_df$transcript_id = gsub("000001", "110001", premrna_df$transcript_id)
-  premrna_df$transcript_id = gsub("000002", "110002", premrna_df$transcript_id)
-  premrna_df$transcript_id = gsub("000003", "110003", premrna_df$transcript_id)
-  premrna_df$transcript_id = gsub("000004", "110004", premrna_df$transcript_id)
-  premrna_df$transcript_id = gsub("000005", "110005", premrna_df$transcript_id)
-  premrna_df$transcript_id = gsub("000006", "110006", premrna_df$transcript_id)
-  premrna_df$transcript_id = gsub("000007", "110007", premrna_df$transcript_id)
-  premrna_df$transcript_id = gsub("000008", "110008", premrna_df$transcript_id)
-  premrna_df$transcript_id = gsub("000009", "110009", premrna_df$transcript_id)
-
+  transcripts_df <- unoptimized_df %>%
+    filter(type == "transcript") %>%
+    mutate(
+      transcript_id = paste0("intergenic_", row_number())
+    )
+  
+  # Create exon entries with the same coordinates as the transcript
+  exons_df <- transcripts_df %>%
+    mutate(
+      type = "exon",
+      exon_id = transcript_id,  # one exon per transcript
+      exon_number = 1L          # ensure it's an integer
+    )
+  
+  # Add missing columns to transcript entries for compatibility (as NA)
+  transcripts_df <- transcripts_df %>%
+    mutate(
+      exon_id = NA_character_,
+      exon_number = NA_integer_
+    )
+  
+  # Combine them
+  premrna_df <- bind_rows(transcripts_df, exons_df) %>%
+    arrange(seqnames, start, end)
+  
   rm(unoptimized_df)
-
+  
   ####  2. Delete select genes ####
   #################################
   genes_to_delete = overlap_df$genes[overlap_df$final_classification == "Delete"]
   new_df = new_df[!new_df$gene_name %in% genes_to_delete,]
-
+  
   ####  3. Delete select transcripts ####
   #######################################
   transcripts_to_delete = overlap_df$transcripts_for_deletion
   transcripts_to_delete <- transcripts_to_delete[transcripts_to_delete!="" & !is.na(transcripts_to_delete)]
-
+  
   transcripts_to_delete_final = transcripts_to_delete[!stringr::str_detect(transcripts_to_delete, ", ")]
-
+  
   if(length(transcripts_to_delete) != 0){
     for (i in 1:length(transcripts_to_delete)){
       a = transcripts_to_delete[i]
@@ -109,133 +123,127 @@ OptimizedAnnotationAssembler <- function(unoptimized_annotation_path, gene_overl
       }
     }
   }
-
+  
   transcripts_to_delete = transcripts_to_delete_final
-
+  
   new_df = new_df[!new_df$transcript_id %in% transcripts_to_delete,]
-
+  
   ####  4. Adjust gene coordinates ####
   #####################################
   boundary_fix = read.csv(gene_extension, header=T)
-
-  left_genes = as.data.frame(cbind(boundary_fix$genes[!is.na(boundary_fix$update_start)], boundary_fix$update_start[!is.na(boundary_fix$update_start)]))
-
-  colnames(left_genes) = c("Var1", "update_start")
-  left_genes$update_start = as.numeric(left_genes$update_start)
-  right_genes = as.data.frame(cbind(boundary_fix$genes[!is.na(boundary_fix$update_end)], boundary_fix$update_end[!is.na(boundary_fix$update_end)]))
-  colnames(right_genes) = c("Var1", "update_end")
-  right_genes$update_end = as.numeric(right_genes$update_end)
-
+  
+  left_genes <- data.frame(
+    gene = boundary_fix$Var1[!is.na(boundary_fix$update_start)],
+    update_start = as.numeric(boundary_fix$update_start[!is.na(boundary_fix$update_start)])
+  )
+  print(left_genes)
+  
+  # Fix for right side (update_end)
+  right_genes <- data.frame(
+    gene = boundary_fix$Var1[!is.na(boundary_fix$update_end)],
+    update_end = as.numeric(boundary_fix$update_end[!is.na(boundary_fix$update_end)])
+  )
+  print(right_genes)
+  
   left_exon_difs = rep(0, length(left_genes)) # for troubleshooting
   right_exon_difs = rep(0, length(right_genes))
-
+  
   for (i in 1:dim(left_genes)[1]){
     gene_entries = which(new_df$gene_name == left_genes[i, 1])
     type_entries = new_df$type[gene_entries]
     first_gene_exon = head(gene_entries[type_entries == "exon"], 1)
     new_df[first_gene_exon, 2] = left_genes[i, 2]
-
+    
     if(identical(new_df[first_gene_exon, 3], integer(0)) & identical(new_df[first_gene_exon, 2], integer(0))){
-
+      
     }
     else{
       left_exon_difs[i] = new_df[first_gene_exon, 3] - new_df[first_gene_exon, 2]
     }
-
-
   }
-
+  
   for (i in 1:dim(right_genes)[1]){
     gene_entries = which(new_df$gene_name == right_genes[i, 1])
     type_entries = new_df$type[gene_entries]
     last_gene_exon = tail(gene_entries[type_entries == "exon"], 1)
+    print(right_genes[i, 2])
     new_df[last_gene_exon, 3] = right_genes[i, 2]
-
+    
     if(identical(new_df[last_gene_exon, 3], integer(0)) & identical(new_df[last_gene_exon, 2], integer(0))){
-
+      
     }
     else{
       right_exon_difs[i] = new_df[last_gene_exon, 3] - new_df[last_gene_exon, 2]
     }
-
   }
-
+  print(new_df[new_df$start > new_df$end, ])
+  
   #### 5. Add pre-mRNA transcripts to genes not in the gene overlap list ####
   ############################################################################
   # Explanation: Cellranger --include-introns mode unfortunately does not pick up on many intronic reads (unclear why despite lengthy correspondence with their support). I can pick those up however if I add the pre-mRNA transcripts to respective genes as exons with new transcript_id values.
-
+  
   ## Genes to modify
-
-  #overlap_df$genes # genes to exclude from premrna reference appending
-  cat("Length of data before filtering out start/end NAs ", nrow(new_df), "\n")
-  new_df <- new_df[!is.na(new_df$start) & !is.na(new_df$end), ]
-  cat("Length of data after filtering out start/end NAs ", nrow(new_df), "\n")
-
-  genes_to_append = unique(new_df$gene_name)
-  print(length(genes_to_append))
-  genes_to_append = setdiff(genes_to_append, overlap_df$gene)
-  print(length(genes_to_append))
-
-  ## temporarily limit genes for debugging
-  genes_to_append <- genes_to_append[1:3000]
-  ## Give new transcript_ids to everything in the pre-mRNA gtf
-
-  for (i in 1:dim(premrna_df)[1]){
-    premrna_df$transcript_id[i] = as.character(i)
+  
+  cat("Length before filtering:", nrow(new_df), "\n")
+  new_df <- new_df %>% filter(!is.na(start), !is.na(end))
+  cat("Length after filtering:", nrow(new_df), "\n")
+  
+  # Identify genes to append (pre-mRNA entries)
+  genes_to_append <- setdiff(unique(new_df$gene_name), overlap_df$gene)
+  cat("Number of genes to append:", length(genes_to_append), "\n")
+  
+  if (length(genes_to_append) > 1) {
+    genes_to_append <- head(genes_to_append, -1)  # original behavior
   }
-
-  ## Reformat the gtf dataframes such that we can add premrna entries to the original unoptimized entries and thus compile a hybrid reference for capturing intronic reads
-
-  final_colnames = intersect(colnames(new_df), colnames(premrna_df))
-
-  new_df = new_df[, final_colnames]
-  premrna_df = premrna_df[, final_colnames]
-
-  ## Append premrna transcript to the end of the gene
-
-  genes_to_append = genes_to_append[1:(length(genes_to_append)-1)]
-
-  for (i in genes_to_append){
-    insert = premrna_df[premrna_df$gene_name %in% i,]
-    first_section = new_df[0:tail(which(new_df$gene_name == i), 1),]
-    last_section = new_df[(tail(which(new_df$gene_name == i), 1)+1):dim(new_df)[1],]
-    new_df = rbind(first_section, insert, last_section)
+  
+  # Filter premrna_df to just the genes we want
+  premrna_insert <- premrna_df %>%
+    filter(gene_name %in% genes_to_append)
+  
+  # Match columns before binding
+  common_cols <- intersect(colnames(new_df), colnames(premrna_insert))
+  new_df <- new_df[, common_cols]
+  premrna_insert <- premrna_insert[, common_cols]
+  
+  if ("exon_number" %in% colnames(new_df)) {
+    new_df$exon_number <- as.integer(new_df$exon_number)
   }
-
+  if ("exon_number" %in% colnames(premrna_insert)) {
+    premrna_insert$exon_number <- as.integer(premrna_insert$exon_number)
+  }
+  
+  # Combine everything
+  new_df <- bind_rows(new_df, premrna_insert)
+  
+  # Optional: sort for CellRanger
+  new_df <- new_df %>%
+    arrange(seqnames, start, end, type)  # adjust 'type' if it's called 'feature'
+  
+  
   #### 6. Rename desired genes ####
   #################################
   # Rename desired genes (example from mouse genome): "Cers1"==>"Cers1_Gdf1" // "Chtf8" ==> "Chtf8_Derpc" // "Insl3" ==> "Insl3_Jak3" // "Pcdhga1" ==> "Pcdhg_all" // "Pcdha1" ==> "Pcdha_all" // "Ugt1a10" ==> "Ugt1a_all" // "4933427D14Rik" ==> "4933427D14Rik_Gm43951" // "Mkks" ==> "Mkks_plus"
-  if(missing(gene_replacement)){
 
-  }
-  else{
-    if(gene_replacement == "test_gene_replacement.csv"){
-      gene_replacement <- system.file("extdata", "test_gene_replacement.csv", package = "ReferenceEnhancer")
-          }
-
-    gene_replacement <- read.csv(gene_replacement, header=T)
-
-    old_names <- gene_replacement[,'old_name']
-    new_names <- gene_replacement[,'new_name']
-
-
-    for (i in 1:length(old_names)){
-      new_df$transcript_name = stringr::str_replace_all(new_df$transcript_name, old_names[i], new_names[i])
-      new_df$gene_name = stringr::str_replace_all(new_df$gene_name, old_names[i], new_names[i])
-    }
-  }
-
+  
   #### 7. Export object to gtf file ####
   ######################################
   print(new_df[is.na(new_df$start) | is.na(new_df$end), ])
   cat("Length of data before filtering out start/end NAs with new premRNA transcripts", nrow(new_df), "\n")
   new_df <- new_df[!is.na(new_df$start) & !is.na(new_df$end), ]
   cat("Length of data after filtering out start/end NAs with new premRNA transcripts", nrow(new_df), "\n")
-  new_gtf = GenomicRanges::makeGRangesFromDataFrame(new_df, keep.extra.columns=TRUE)
-
   
-
+  cat("New_df rows:", nrow(new_df), "\n")
+  cat("PremRNA_insert rows:", nrow(premrna_insert), "\n")
+  
+  # Check overlap
+  common_genes <- intersect(unique(new_df$gene_name), unique(premrna_df$gene_name))
+  cat("Common genes between new_df and premrna_df:", length(common_genes), "\n")
+  
+  new_gtf = GenomicRanges::makeGRangesFromDataFrame(new_df, keep.extra.columns=TRUE)
+  print(new_gtf)
+  print("new gtf created")
+  
+  
   write_gtf(new_gtf, "optimized_reference.gtf")
   print("Optimized annotation reference has been saved in working directory as optimized_reference.gtf")
-
 }
